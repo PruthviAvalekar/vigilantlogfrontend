@@ -1,6 +1,3 @@
-
-import React from "react";
-
 function parseDate(dateString) {
   if (!dateString || dateString === "N/A") return "N/A";
 
