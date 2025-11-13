@@ -1,8 +1,9 @@
 // src/pages/Dashboard.jsx
-import React from "react";
+import React, { useEffect } from "react";
 import MetricCard from "../components/MetricCard";
 import IndicatorsList from "../components/IndicatorsList";
 import "../styles/dashboard.css";
+import axios from "axios";
 
 // Import local JSON result files
 import appCrashData from "../results/app_crash_result.json";
@@ -13,8 +14,30 @@ import hangData from "../results/hang_result.json";
 export default function Dashboard() {
   const appEntry = Array.isArray(appCrashData) ? appCrashData[0] : appCrashData;
   const bsodEntry = bsodData;
+  // let bsodEntry;
+  // let appEntry;
+  // let unexpectedEntry;
+  // let hangEntry;
   const unexpectedEntry = unexpectedData;
   const hangEntry = Array.isArray(hangData) ? hangData[0] : hangData;
+
+  useEffect(() => {
+    const getData = async () => {
+      try {
+        const deviceName = sessionStorage.getItem("deviceName");
+        const bsodData = await axios.post(
+          "https://vigilant-log-cyberx.onrender.com/api/prediction/bsod",
+          { deviceName: deviceName }
+        );
+
+        console.log(bsodData);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    getData();
+  }, []);
 
   return (
     <div className="dashboard-root">
