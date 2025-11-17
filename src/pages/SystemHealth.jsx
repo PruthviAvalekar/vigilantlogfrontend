@@ -127,14 +127,13 @@ export default function SystemHealth() {
 
 function Sidebar({ active }) {
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: "📊", href: "/dashboard" },
+    { id: "dashboard", label: "Dashboard", href: "/dashboard" },
     {
       id: "health",
       label: "System Health",
-      icon: "💚",
       href: "/system-health",
     },
-    { id: "analysis", label: "Analysis", icon: "🔍", href: "/analysis" },
+    { id: "analysis", label: "Analysis", href: "/analysis" },
   ];
 
   return (
@@ -180,21 +179,18 @@ function SystemOverview({ systemMetrics }) {
   return (
     <div className="system-overview">
       <div className="overview-card">
-        <span className="overview-icon">⏱️</span>
         <div className="overview-content">
           <div className="overview-label">Uptime</div>
           <div className="overview-value">{systemMetrics.uptime}</div>
         </div>
       </div>
       <div className="overview-card">
-        <span className="overview-icon">⚙️</span>
         <div className="overview-content">
           <div className="overview-label">Active Processes</div>
           <div className="overview-value">{systemMetrics.processes}</div>
         </div>
       </div>
       <div className="overview-card">
-        <span className="overview-icon">🌡️</span>
         <div className="overview-content">
           <div className="overview-label">Temperature</div>
           <div className="overview-value">{systemMetrics.temperature}°C</div>
@@ -216,7 +212,6 @@ function MetricsGrid({
       title: "CPU Usage",
       value: `${systemMetrics.cpuUsage.toFixed(1)}%`,
       percent: systemMetrics.cpuUsage,
-      icon: "🖥️",
     },
     {
       title: "Memory Usage",
@@ -224,19 +219,16 @@ function MetricsGrid({
         systemMetrics.ramTotal
       } GB`,
       percent: parseFloat(ramPercent),
-      icon: "💾",
     },
     {
       title: "Disk Usage",
       value: `${systemMetrics.diskUsed} / ${systemMetrics.diskTotal} GB`,
       percent: parseFloat(diskPercent),
-      icon: "💿",
     },
     {
       title: "System Temperature",
       value: `${systemMetrics.temperature.toFixed(0)}°C`,
       percent: (systemMetrics.temperature / 100) * 100,
-      icon: "🌡️",
     },
   ];
 

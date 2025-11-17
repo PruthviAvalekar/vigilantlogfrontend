@@ -216,14 +216,13 @@ export default function Dashboard() {
 
 function Sidebar({ active }) {
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: "📊", href: "/dashboard" },
+    { id: "dashboard", label: "Dashboard", href: "/dashboard" },
     {
       id: "health",
       label: "System Health",
-      icon: "💚",
       href: "/system-health",
     },
-    { id: "analysis", label: "Analysis", icon: "🔍", href: "/analysis" },
+    { id: "analysis", label: "Analysis", href: "/analysis" },
   ];
 
   return (
