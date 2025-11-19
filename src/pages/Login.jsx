@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import "../styles/auth.css";
+import axios from "axios";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,10 +17,33 @@ export default function Login() {
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Login:", formData);
-    navigate("/landing");
+    try {
+      const payload = {
+        email: formData.email,
+        password: formData.password,
+        deviceName: formData.deviceName,
+      };
+
+      const response = await axios.post(
+        "https://vigilant-log-cyberx.onrender.com/api/auth/login",
+        payload
+      );
+
+      console.log(response);
+      sessionStorage.setItem(
+        "deviceName",
+        response?.data?.data?.user?.deviceName
+      );
+      sessionStorage.setItem("token", response?.data?.data?.token);
+      sessionStorage.setItem("username", response?.data?.data?.user?.username);
+      sessionStorage.setItem("id", response?.data?.data?.user?.id);
+      sessionStorage.setItem("email", response?.data?.data?.user?.email);
+      navigate("/landing");
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   return (

@@ -1,444 +1,4 @@
 // src/pages/Dashboard.jsx
-import { useEffect, useState } from "react";
-import { Doughnut, Bar } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import axios from "axios";
-import "../styles/dashboard.css";
-
-ChartJS.register(
-  ArcElement,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-export default function Dashboard() {
-  const [bsodEntry, setBsodEntry] = useState(null);
-  const [appEntry, setAppEntry] = useState(null);
-  const [unexpectedEntry, setUnexpectedEntry] = useState(null);
-  const [hangEntry, setHangEntry] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const CACHE_KEY = "vigilant_log_cache";
-    const CACHE_DURATION = 7 * 60 * 1000; // 7 minutes
-
-    const getData = async (forceRefresh = false) => {
-      try {
-        if (!forceRefresh) {
-          const cachedData = localStorage.getItem(CACHE_KEY);
-          if (cachedData) {
-            const { data, timestamp } = JSON.parse(cachedData);
-            const now = Date.now();
-
-            if (now - timestamp < CACHE_DURATION) {
-              setBsodEntry(data.bsod);
-              setAppEntry(data.app);
-              setUnexpectedEntry(data.shutdown);
-              setHangEntry(data.hang);
-              setLoading(false);
-              return;
-            }
-          }
-        }
-
-        setLoading(true);
-        const deviceName = sessionStorage.getItem("deviceName") || "GOAT";
-
-        const [bsodData, appData, shutdownData, hangData] = await Promise.all([
-          axios.post(
-            "https://vigilant-log-cyberx.onrender.com/api/prediction/bsod",
-            { deviceName }
-          ),
-          axios.post(
-            "https://vigilant-log-cyberx.onrender.com/api/prediction/app-crash",
-            { deviceName }
-          ),
-          axios.post(
-            "https://vigilant-log-cyberx.onrender.com/api/prediction/shutdown",
-            { deviceName }
-          ),
-          axios.post(
-            "https://vigilant-log-cyberx.onrender.com/api/prediction/hang",
-            { deviceName }
-          ),
-        ]);
-
-        const freshData = {
-          bsod: bsodData?.data?.data,
-          app: appData?.data?.data,
-          shutdown: shutdownData?.data?.data,
-          hang: hangData?.data?.data,
-        };
-
-        setBsodEntry(freshData.bsod);
-        setAppEntry(freshData.app);
-        setUnexpectedEntry(freshData.shutdown);
-        setHangEntry(freshData.hang);
-
-        localStorage.setItem(
-          CACHE_KEY,
-          JSON.stringify({
-            data: freshData,
-            timestamp: Date.now(),
-          })
-        );
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getData();
-
-    const interval = setInterval(() => {
-      getData(true);
-    }, CACHE_DURATION);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="dashboard-root">
-        <Sidebar active="dashboard" />
-        <main className="main">
-          <Header />
-          <div className="loading-container">
-            <div className="spinner"></div>
-            <p className="loading-text">Loading system data...</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="dashboard-root">
-        <Sidebar active="dashboard" />
-        <main className="main">
-          <Header />
-          <div className="error-container">
-            <span className="error-icon">⚠️</span>
-            <p className="error-text">Error loading data: {error}</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  const predictions = [
-    {
-      title: "App Crash",
-      prediction: appEntry?.prediction || "No Data",
-      confidence: appEntry?.confidence,
-      isRisk: appEntry?.prediction?.includes("Crash"),
-      color: appEntry?.prediction?.includes("Crash") ? "#FF4560" : "#00D4BD",
-    },
-    {
-      title: "BSOD",
-      prediction: bsodEntry?.prediction || "No Data",
-      confidence: bsodEntry?.confidence,
-      isRisk: bsodEntry?.prediction?.includes("BSOD"),
-      color: bsodEntry?.prediction?.includes("BSOD") ? "#FF4560" : "#00D4BD",
-    },
-    {
-      title: "Unexpected Shutdown",
-      prediction: unexpectedEntry?.prediction || "No Data",
-      confidence: unexpectedEntry?.confidence,
-      isRisk: unexpectedEntry?.prediction?.includes("Shutdown"),
-      color: unexpectedEntry?.prediction?.includes("Shutdown")
-        ? "#FF4560"
-        : "#00D4BD",
-    },
-    {
-      title: "System Hang",
-      prediction: hangEntry?.prediction || "No Data",
-      confidence: hangEntry?.confidence,
-      isRisk: hangEntry?.prediction?.includes("Hang"),
-      color: hangEntry?.prediction?.includes("Hang") ? "#FF4560" : "#00D4BD",
-    },
-  ];
-
-  const analyses = [
-    {
-      title: "BSOD Analysis",
-      summary: bsodEntry?.analysis?.summary,
-      indicators: bsodEntry?.analysis?.indicators || [],
-    },
-    {
-      title: "App Crash Analysis",
-      summary: appEntry?.analysis?.summary,
-      indicators: appEntry?.analysis?.indicators || [],
-    },
-    {
-      title: "Unexpected Shutdown Analysis",
-      summary: unexpectedEntry?.analysis?.summary,
-      indicators: unexpectedEntry?.analysis?.indicators || [],
-    },
-    {
-      title: "System Hang Analysis",
-      summary: hangEntry?.analysis?.summary,
-      indicators: hangEntry?.analysis?.indicators || [],
-    },
-  ];
-
-  return (
-    <div className="dashboard-root">
-      <Sidebar active="dashboard" />
-      <main className="main">
-        <Header />
-        <div className="content">
-          <StatsGrid predictions={predictions} />
-          <ChartsSection predictions={predictions} />
-          <AnalysisSection analyses={analyses} />
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function Sidebar({ active }) {
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", href: "/dashboard" },
-    {
-      id: "health",
-      label: "System Health",
-      href: "/system-health",
-    },
-    { id: "analysis", label: "Analysis", href: "/analysis" },
-  ];
-
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <span className="brand-icon">⚡</span>
-        <span className="brand-text">VigilantLog</span>
-      </div>
-      <nav className="sidebar-nav">
-        {navItems.map((item) => (
-          <a
-            key={item.id}
-            href={item.href}
-            className={`nav-item ${active === item.id ? "active" : ""}`}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            {item.label}
-          </a>
-        ))}
-      </nav>
-    </aside>
-  );
-}
-
-function Header() {
-  return (
-    <header className="header">
-      <div>
-        <h1 className="header-title">System Overview</h1>
-        <p className="header-subtitle">Real-time prediction analytics</p>
-      </div>
-      <div className="header-right">
-        <div className="status-badge">
-          <span className="status-dot"></span>
-          Live
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function StatsGrid({ predictions }) {
-  return (
-    <div className="stats-grid">
-      {predictions.map((pred, idx) => (
-        <StatCard key={idx} prediction={pred} />
-      ))}
-    </div>
-  );
-}
-
-function StatCard({ prediction }) {
-  const getConfidenceValue = () => {
-    if (!prediction.confidence) return 0;
-    const values = Object.values(prediction.confidence);
-    return Math.max(...values.map((v) => parseFloat(v) || 0));
-  };
-
-  const confidenceValue = getConfidenceValue();
-
-  return (
-    <div
-      className="stat-card"
-      style={{ borderLeft: `4px solid ${prediction.color}` }}
-    >
-      <div className="stat-header">
-        <span className="stat-type">{prediction.title}</span>
-        <span
-          className="stat-badge"
-          style={{
-            background: prediction.isRisk ? "#FFE8EC" : "#E0FFF9",
-            color: prediction.color,
-          }}
-        >
-          {prediction.isRisk ? "Risk Detected" : "Nominal"}
-        </span>
-      </div>
-      <div className="stat-prediction">{prediction.prediction}</div>
-      <div className="stat-confidence">
-        Confidence: {confidenceValue.toFixed(1)}%
-      </div>
-      <div className="stat-bar">
-        <div
-          className="stat-bar-fill"
-          style={{
-            width: `${confidenceValue}%`,
-            background: prediction.color,
-          }}
-        ></div>
-      </div>
-    </div>
-  );
-}
-
-function ChartsSection({ predictions }) {
-  const riskCount = predictions.filter((p) => p.isRisk).length;
-  const safeCount = predictions.length - riskCount;
-
-  const doughnutData = {
-    labels: ["Risk Detected", "Nominal"],
-    datasets: [
-      {
-        data: [riskCount, safeCount],
-        backgroundColor: ["#FF4560", "#00D4BD"],
-        borderWidth: 0,
-        cutout: "75%",
-      },
-    ],
-  };
-
-  const barData = {
-    labels: predictions.map((p) => p.title),
-    datasets: [
-      {
-        label: "Confidence Level",
-        data: predictions.map((p) => {
-          if (!p.confidence) return 0;
-          const values = Object.values(p.confidence);
-          return Math.max(...values.map((v) => parseFloat(v) || 0));
-        }),
-        backgroundColor: predictions.map((p) =>
-          p.isRisk ? "rgba(255, 69, 96, 0.8)" : "rgba(0, 212, 189, 0.8)"
-        ),
-        borderRadius: 8,
-        barThickness: 40,
-      },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: "bottom",
-        labels: {
-          padding: 20,
-          font: { size: 13, family: "Inter" },
-          color: "#64748B",
-        },
-      },
-    },
-  };
-
-  const barOptions = {
-    ...chartOptions,
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        grid: { color: "rgba(0,0,0,0.03)" },
-        ticks: { color: "#64748B", font: { size: 12 } },
-      },
-      x: {
-        grid: { display: false },
-        ticks: { color: "#64748B", font: { size: 12 } },
-      },
-    },
-  };
-
-  return (
-    <div className="charts-section">
-      <div className="chart-card">
-        <h3 className="chart-title">System Risk Overview</h3>
-        <div className="chart-container doughnut-chart">
-          <Doughnut data={doughnutData} options={chartOptions} />
-          <div className="doughnut-center">
-            <div className="doughnut-value">{riskCount}</div>
-            <div className="doughnut-label">Risks</div>
-          </div>
-        </div>
-      </div>
-      <div className="chart-card">
-        <h3 className="chart-title">Confidence Levels</h3>
-        <div className="chart-container bar-chart">
-          <Bar data={barData} options={barOptions} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AnalysisSection({ analyses }) {
-  return (
-    <div className="analysis-section">
-      <h3 className="section-title">System Analysis</h3>
-      <div className="analysis-grid">
-        {analyses.map((analysis, idx) => (
-          <AnalysisCard key={idx} analysis={analysis} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AnalysisCard({ analysis }) {
-  return (
-    <div className="analysis-card">
-      <h4 className="analysis-title">{analysis.title}</h4>
-      <p className="analysis-summary">
-        {analysis.summary || "No analysis available"}
-      </p>
-      {analysis.indicators && analysis.indicators.length > 0 && (
-        <div className="indicators-preview">
-          <span className="indicators-count">
-            {analysis.indicators.length} indicators found
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-//below this is final
-// src/pages/Dashboard.jsx
 // import { useEffect, useState } from "react";
 // import MetricCard from "../components/MetricCard";
 // import IndicatorsList from "../components/IndicatorsList";
@@ -724,7 +284,658 @@ function AnalysisCard({ analysis }) {
 //   );
 // }
 
+import { useEffect, useState } from "react";
+import axios from "axios";
+import MetricCard from "../components/MetricCard";
+import IndicatorsList from "../components/IndicatorsList";
+
+export default function Dashboard() {
+  const [bsod, setBsod] = useState(null);
+  const [app, setApp] = useState(null);
+  const [shutdown, setShutdown] = useState(null);
+  const [hang, setHang] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const deviceName = sessionStorage.getItem("deviceName") || "MAHESH";
+
+        const [b, a, s, h] = await Promise.all([
+          axios.post(
+            "https://vigilant-log-cyberx.onrender.com/api/prediction/bsod",
+            { deviceName }
+          ),
+          axios.post(
+            "https://vigilant-log-cyberx.onrender.com/api/prediction/app-crash",
+            { deviceName }
+          ),
+          axios.post(
+            "https://vigilant-log-cyberx.onrender.com/api/prediction/shutdown",
+            { deviceName }
+          ),
+          axios.post(
+            "https://vigilant-log-cyberx.onrender.com/api/prediction/hang",
+            { deviceName }
+          ),
+        ]);
+
+        setBsod(b.data.data);
+        setApp(a.data.data);
+        setShutdown(s.data.data);
+        setHang(h.data.data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, []);
+
+  if (loading)
+    return (
+      <div className="w-full h-screen flex items-center justify-center text-gray-500">
+        Loading...
+      </div>
+    );
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      <aside className="w-64 bg-white shadow-sm border-r border-gray-200 p-8">
+        <h1 className="text-3xl font-bold text-blue-600 mb-10 tracking-tight">
+          VigilantLog
+        </h1>
+
+        <nav className="space-y-6 text-lg">
+          <a href="/dashboard" className="text-blue-600 font-semibold">
+            Dashboard
+          </a>
+          <a
+            href="/system-health"
+            className="hover:text-blue-500 text-gray-700"
+          >
+            System Health
+          </a>
+          <a href="/analysis" className="hover:text-blue-500 text-gray-700">
+            Analysis
+          </a>
+        </nav>
+      </aside>
+
+      <main className="flex-1 p-10 bg-gray-50">
+        {/* Header */}
+        <header className="mb-10">
+          <h2 className="text-4xl font-bold text-gray-800 tracking-tight">
+            Dashboard
+          </h2>
+          <p className="text-gray-500 mt-1 text-lg">
+            System Prediction Overview
+          </p>
+        </header>
+
+        {/* Metric Cards — cleaner spacing */}
+        <section className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-2 gap-12">
+          <MetricCard title="App Crash" entry={app} />
+          <MetricCard title="BSOD" entry={bsod} />
+          <MetricCard title="Unexpected Shutdown" entry={shutdown} />
+          <MetricCard title="System Hang" entry={hang} />
+        </section>
+
+        {/* Divider */}
+        <div className="my-12 border-t border-gray-200"></div>
+
+        {/* Analysis Panels — full width + better spacing */}
+        <section className="space-y-10">
+          <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-2xl font-semibold mb-4">BSOD Analysis</h4>
+            <p className="text-gray-700 mb-6 leading-relaxed">
+              {bsod?.analysis?.summary}
+            </p>
+            <IndicatorsList indicators={bsod?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-2xl font-semibold mb-4">App Crash Analysis</h4>
+            <p className="text-gray-700 mb-6 leading-relaxed">
+              {app?.analysis?.summary}
+            </p>
+            <IndicatorsList indicators={app?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-2xl font-semibold mb-4">
+              Unexpected Shutdown Analysis
+            </h4>
+            <p className="text-gray-700 mb-6 leading-relaxed">
+              {shutdown?.analysis?.summary}
+            </p>
+            <IndicatorsList indicators={shutdown?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-2xl font-semibold mb-4">
+              System Hang Analysis
+            </h4>
+            <p className="text-gray-700 mb-6 leading-relaxed">
+              {hang?.analysis?.summary}
+            </p>
+            <IndicatorsList indicators={hang?.analysis?.indicators} />
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 // above this is final
+
+  {
+    /* Sidebar */
+  }
+  {
+    /* <aside className="w-64 bg-white shadow-lg p-6 border-r border-gray-100">
+        <h1 className="text-2xl font-bold text-blue-600 mb-8">VigilantLog</h1>
+
+        <nav className="space-y-4 text-gray-700">
+          <a href="/dashboard" className="block font-semibold text-blue-500">
+            Dashboard
+          </a>
+          <a href="/system-health" className="block hover:text-blue-500">
+            System Health
+          </a>
+          <a href="/analysis" className="block hover:text-blue-500">
+            Analysis
+          </a>
+        </nav>
+      </aside> */
+  }
+
+  {
+    /* Main */
+  }
+  {
+    /* <main className="flex-1 p-8">
+        <header className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
+          <p className="text-gray-500">System Prediction Overview</p>
+        </header>
+
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <MetricCard title="App Crash" entry={app} />
+          <MetricCard title="BSOD" entry={bsod} />
+          <MetricCard title="Unexpected Shutdown" entry={shutdown} />
+          <MetricCard title="System Hang" entry={hang} />
+        </section>
+
+        <section className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-xl font-semibold mb-2">BSOD Analysis</h4>
+            <p className="text-gray-600 mb-4">{bsod?.analysis?.summary}</p>
+            <IndicatorsList indicators={bsod?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-xl font-semibold mb-2">App Crash Analysis</h4>
+            <p className="text-gray-600 mb-4">{app?.analysis?.summary}</p>
+            <IndicatorsList indicators={app?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-xl font-semibold mb-2">
+              Unexpected Shutdown Analysis
+            </h4>
+            <p className="text-gray-600 mb-4">{shutdown?.analysis?.summary}</p>
+            <IndicatorsList indicators={shutdown?.analysis?.indicators} />
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
+            <h4 className="text-xl font-semibold mb-2">System Hang Analysis</h4>
+            <p className="text-gray-600 mb-4">{hang?.analysis?.summary}</p>
+            <IndicatorsList indicators={hang?.analysis?.indicators} />
+          </div>
+        </section>
+      </main> */
+  }
+// src/pages/Dashboard.jsx
+// import { useEffect, useState } from "react";
+// import { Doughnut, Bar } from "react-chartjs-2";
+// import {
+//   Chart as ChartJS,
+//   ArcElement,
+//   CategoryScale,
+//   LinearScale,
+//   BarElement,
+//   Title,
+//   Tooltip,
+//   Legend,
+// } from "chart.js";
+// import axios from "axios";
+// import "../styles/dashboard.css";
+
+// ChartJS.register(
+//   ArcElement,
+//   CategoryScale,
+//   LinearScale,
+//   BarElement,
+//   Title,
+//   Tooltip,
+//   Legend
+// );
+
+// export default function Dashboard() {
+//   const [bsodEntry, setBsodEntry] = useState(null);
+//   const [appEntry, setAppEntry] = useState(null);
+//   const [unexpectedEntry, setUnexpectedEntry] = useState(null);
+//   const [hangEntry, setHangEntry] = useState(null);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+
+//   useEffect(() => {
+//     const CACHE_KEY = "vigilant_log_cache";
+//     const CACHE_DURATION = 7 * 60 * 1000; // 7 minutes
+
+//     const getData = async (forceRefresh = false) => {
+//       try {
+//         if (!forceRefresh) {
+//           const cachedData = localStorage.getItem(CACHE_KEY);
+//           if (cachedData) {
+//             const { data, timestamp } = JSON.parse(cachedData);
+//             const now = Date.now();
+
+//             if (now - timestamp < CACHE_DURATION) {
+//               setBsodEntry(data.bsod);
+//               setAppEntry(data.app);
+//               setUnexpectedEntry(data.shutdown);
+//               setHangEntry(data.hang);
+//               setLoading(false);
+//               return;
+//             }
+//           }
+//         }
+
+//         setLoading(true);
+//         const deviceName = sessionStorage.getItem("deviceName") || "GOAT";
+
+//         const [bsodData, appData, shutdownData, hangData] = await Promise.all([
+//           axios.post(
+//             "https://vigilant-log-cyberx.onrender.com/api/prediction/bsod",
+//             { deviceName }
+//           ),
+//           axios.post(
+//             "https://vigilant-log-cyberx.onrender.com/api/prediction/app-crash",
+//             { deviceName }
+//           ),
+//           axios.post(
+//             "https://vigilant-log-cyberx.onrender.com/api/prediction/shutdown",
+//             { deviceName }
+//           ),
+//           axios.post(
+//             "https://vigilant-log-cyberx.onrender.com/api/prediction/hang",
+//             { deviceName }
+//           ),
+//         ]);
+
+//         const freshData = {
+//           bsod: bsodData?.data?.data,
+//           app: appData?.data?.data,
+//           shutdown: shutdownData?.data?.data,
+//           hang: hangData?.data?.data,
+//         };
+
+//         setBsodEntry(freshData.bsod);
+//         setAppEntry(freshData.app);
+//         setUnexpectedEntry(freshData.shutdown);
+//         setHangEntry(freshData.hang);
+
+//         localStorage.setItem(
+//           CACHE_KEY,
+//           JSON.stringify({
+//             data: freshData,
+//             timestamp: Date.now(),
+//           })
+//         );
+//       } catch (err) {
+//         console.error("Error fetching data:", err);
+//         setError(err.message);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+
+//     getData();
+
+//     const interval = setInterval(() => {
+//       getData(true);
+//     }, CACHE_DURATION);
+
+//     return () => clearInterval(interval);
+//   }, []);
+
+//   if (loading) {
+//     return (
+//       <div className="dashboard-root">
+//         <Sidebar active="dashboard" />
+//         <main className="main">
+//           <Header />
+//           <div className="loading-container">
+//             <div className="spinner"></div>
+//             <p className="loading-text">Loading system data...</p>
+//           </div>
+//         </main>
+//       </div>
+//     );
+//   }
+
+//   if (error) {
+//     return (
+//       <div className="dashboard-root">
+//         <Sidebar active="dashboard" />
+//         <main className="main">
+//           <Header />
+//           <div className="error-container">
+//             <span className="error-icon">⚠️</span>
+//             <p className="error-text">Error loading data: {error}</p>
+//           </div>
+//         </main>
+//       </div>
+//     );
+//   }
+
+//   const predictions = [
+//     {
+//       title: "App Crash",
+//       prediction: appEntry?.prediction || "No Data",
+//       confidence: appEntry?.confidence,
+//       isRisk: appEntry?.prediction?.includes("Crash"),
+//       color: appEntry?.prediction?.includes("Crash") ? "#FF4560" : "#00D4BD",
+//     },
+//     {
+//       title: "BSOD",
+//       prediction: bsodEntry?.prediction || "No Data",
+//       confidence: bsodEntry?.confidence,
+//       isRisk: bsodEntry?.prediction?.includes("BSOD"),
+//       color: bsodEntry?.prediction?.includes("BSOD") ? "#FF4560" : "#00D4BD",
+//     },
+//     {
+//       title: "Unexpected Shutdown",
+//       prediction: unexpectedEntry?.prediction || "No Data",
+//       confidence: unexpectedEntry?.confidence,
+//       isRisk: unexpectedEntry?.prediction?.includes("Shutdown"),
+//       color: unexpectedEntry?.prediction?.includes("Shutdown")
+//         ? "#FF4560"
+//         : "#00D4BD",
+//     },
+//     {
+//       title: "System Hang",
+//       prediction: hangEntry?.prediction || "No Data",
+//       confidence: hangEntry?.confidence,
+//       isRisk: hangEntry?.prediction?.includes("Hang"),
+//       color: hangEntry?.prediction?.includes("Hang") ? "#FF4560" : "#00D4BD",
+//     },
+//   ];
+
+//   const analyses = [
+//     {
+//       title: "BSOD Analysis",
+//       summary: bsodEntry?.analysis?.summary,
+//       indicators: bsodEntry?.analysis?.indicators || [],
+//     },
+//     {
+//       title: "App Crash Analysis",
+//       summary: appEntry?.analysis?.summary,
+//       indicators: appEntry?.analysis?.indicators || [],
+//     },
+//     {
+//       title: "Unexpected Shutdown Analysis",
+//       summary: unexpectedEntry?.analysis?.summary,
+//       indicators: unexpectedEntry?.analysis?.indicators || [],
+//     },
+//     {
+//       title: "System Hang Analysis",
+//       summary: hangEntry?.analysis?.summary,
+//       indicators: hangEntry?.analysis?.indicators || [],
+//     },
+//   ];
+
+//   return (
+//     <div className="dashboard-root">
+//       <Sidebar active="dashboard" />
+//       <main className="main">
+//         <Header />
+//         <div className="content">
+//           <StatsGrid predictions={predictions} />
+//           <ChartsSection predictions={predictions} />
+//           <AnalysisSection analyses={analyses} />
+//         </div>
+//       </main>
+//     </div>
+//   );
+// }
+
+// function Sidebar({ active }) {
+//   const navItems = [
+//     { id: "dashboard", label: "Dashboard", href: "/dashboard" },
+//     {
+//       id: "health",
+//       label: "System Health",
+//       href: "/system-health",
+//     },
+//     { id: "analysis", label: "Analysis", href: "/analysis" },
+//   ];
+
+//   return (
+//     <aside className="sidebar">
+//       <div className="sidebar-brand">
+//         <span className="brand-icon">⚡</span>
+//         <span className="brand-text">VigilantLog</span>
+//       </div>
+//       <nav className="sidebar-nav">
+//         {navItems.map((item) => (
+//           <a
+//             key={item.id}
+//             href={item.href}
+//             className={`nav-item ${active === item.id ? "active" : ""}`}
+//           >
+//             <span className="nav-icon">{item.icon}</span>
+//             {item.label}
+//           </a>
+//         ))}
+//       </nav>
+//     </aside>
+//   );
+// }
+
+// function Header() {
+//   return (
+//     <header className="header">
+//       <div>
+//         <h1 className="header-title">System Overview</h1>
+//         <p className="header-subtitle">Real-time prediction analytics</p>
+//       </div>
+//       <div className="header-right">
+//         <div className="status-badge">
+//           <span className="status-dot"></span>
+//           Live
+//         </div>
+//       </div>
+//     </header>
+//   );
+// }
+
+// function StatsGrid({ predictions }) {
+//   return (
+//     <div className="stats-grid">
+//       {predictions.map((pred, idx) => (
+//         <StatCard key={idx} prediction={pred} />
+//       ))}
+//     </div>
+//   );
+// }
+
+// function StatCard({ prediction }) {
+//   const getConfidenceValue = () => {
+//     if (!prediction.confidence) return 0;
+//     const values = Object.values(prediction.confidence);
+//     return Math.max(...values.map((v) => parseFloat(v) || 0));
+//   };
+
+//   const confidenceValue = getConfidenceValue();
+
+//   return (
+//     <div
+//       className="stat-card"
+//       style={{ borderLeft: `4px solid ${prediction.color}` }}
+//     >
+//       <div className="stat-header">
+//         <span className="stat-type">{prediction.title}</span>
+//         <span
+//           className="stat-badge"
+//           style={{
+//             background: prediction.isRisk ? "#FFE8EC" : "#E0FFF9",
+//             color: prediction.color,
+//           }}
+//         >
+//           {prediction.isRisk ? "Risk Detected" : "Nominal"}
+//         </span>
+//       </div>
+//       <div className="stat-prediction">{prediction.prediction}</div>
+//       <div className="stat-confidence">
+//         Confidence: {confidenceValue.toFixed(1)}%
+//       </div>
+//       <div className="stat-bar">
+//         <div
+//           className="stat-bar-fill"
+//           style={{
+//             width: `${confidenceValue}%`,
+//             background: prediction.color,
+//           }}
+//         ></div>
+//       </div>
+//     </div>
+//   );
+// }
+
+// function ChartsSection({ predictions }) {
+//   const riskCount = predictions.filter((p) => p.isRisk).length;
+//   const safeCount = predictions.length - riskCount;
+
+//   const doughnutData = {
+//     labels: ["Risk Detected", "Nominal"],
+//     datasets: [
+//       {
+//         data: [riskCount, safeCount],
+//         backgroundColor: ["#FF4560", "#00D4BD"],
+//         borderWidth: 0,
+//         cutout: "75%",
+//       },
+//     ],
+//   };
+
+//   const barData = {
+//     labels: predictions.map((p) => p.title),
+//     datasets: [
+//       {
+//         label: "Confidence Level",
+//         data: predictions.map((p) => {
+//           if (!p.confidence) return 0;
+//           const values = Object.values(p.confidence);
+//           return Math.max(...values.map((v) => parseFloat(v) || 0));
+//         }),
+//         backgroundColor: predictions.map((p) =>
+//           p.isRisk ? "rgba(255, 69, 96, 0.8)" : "rgba(0, 212, 189, 0.8)"
+//         ),
+//         borderRadius: 8,
+//         barThickness: 40,
+//       },
+//     ],
+//   };
+
+//   const chartOptions = {
+//     responsive: true,
+//     maintainAspectRatio: false,
+//     plugins: {
+//       legend: {
+//         display: true,
+//         position: "bottom",
+//         labels: {
+//           padding: 20,
+//           font: { size: 13, family: "Inter" },
+//           color: "#64748B",
+//         },
+//       },
+//     },
+//   };
+
+//   const barOptions = {
+//     ...chartOptions,
+//     scales: {
+//       y: {
+//         beginAtZero: true,
+//         max: 100,
+//         grid: { color: "rgba(0,0,0,0.03)" },
+//         ticks: { color: "#64748B", font: { size: 12 } },
+//       },
+//       x: {
+//         grid: { display: false },
+//         ticks: { color: "#64748B", font: { size: 12 } },
+//       },
+//     },
+//   };
+
+//   return (
+//     <div className="charts-section">
+//       <div className="chart-card">
+//         <h3 className="chart-title">System Risk Overview</h3>
+//         <div className="chart-container doughnut-chart">
+//           <Doughnut data={doughnutData} options={chartOptions} />
+//           <div className="doughnut-center">
+//             <div className="doughnut-value">{riskCount}</div>
+//             <div className="doughnut-label">Risks</div>
+//           </div>
+//         </div>
+//       </div>
+//       <div className="chart-card">
+//         <h3 className="chart-title">Confidence Levels</h3>
+//         <div className="chart-container bar-chart">
+//           <Bar data={barData} options={barOptions} />
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+// function AnalysisSection({ analyses }) {
+//   return (
+//     <div className="analysis-section">
+//       <h3 className="section-title">System Analysis</h3>
+//       <div className="analysis-grid">
+//         {analyses.map((analysis, idx) => (
+//           <AnalysisCard key={idx} analysis={analysis} />
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }
+
+// function AnalysisCard({ analysis }) {
+//   return (
+//     <div className="analysis-card">
+//       <h4 className="analysis-title">{analysis.title}</h4>
+//       <p className="analysis-summary">
+//         {analysis.summary || "No analysis available"}
+//       </p>
+//       {analysis.indicators && analysis.indicators.length > 0 && (
+//         <div className="indicators-preview">
+//           <span className="indicators-count">
+//             {analysis.indicators.length} indicators found
+//           </span>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 
 // // src/pages/Dashboard.jsx
 // import React, { useEffect, useState } from "react";

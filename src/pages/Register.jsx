@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import "../styles/auth.css";
+import axios from "axios";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -10,7 +11,7 @@ export default function Register() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [formData, setFormData] = useState({
-    fullName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -20,10 +21,36 @@ export default function Register() {
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Register:", formData);
-    navigate("/landing");
+    try {
+      const payload = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        deviceName: formData.deviceName,
+      };
+
+      console.log(payload);
+
+      const response = await axios.post(
+        "https://vigilant-log-cyberx.onrender.com/api/auth/register",
+        payload
+      );
+
+      console.log(response);
+      sessionStorage.setItem(
+        "deviceName",
+        response?.data?.data?.user?.deviceName
+      );
+      sessionStorage.setItem("token", response?.data?.data?.token);
+      sessionStorage.setItem("username", response?.data?.data?.user?.username);
+      sessionStorage.setItem("id", response?.data?.data?.user?.id);
+      sessionStorage.setItem("email", response?.data?.data?.user?.email);
+      navigate("/login");
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   return (
@@ -41,9 +68,9 @@ export default function Register() {
             <div className="input-wrap">
               <User className="icon" />
               <input
-                name="fullName"
+                name="username"
                 placeholder="John Doe"
-                value={formData.fullName}
+                value={formData.username}
                 onChange={handleChange}
                 required
               />
